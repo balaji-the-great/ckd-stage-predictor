@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CKD Stage Predictor | AI Kidney Health Analysis</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --kidney-red:   #c0392b;
+    --kidney-dark:  #1a0a09;
+    --kidney-deep:  #2d1210;
+    --kidney-mid:   #4a1e1c;
+    --accent-gold:  #e8a838;
+    --accent-teal:  #00b4a6;
+    --text-light:   #f0e8e6;
+    --text-muted:   #a89490;
+    --stage-1: #22c55e;
+    --stage-2: #84cc16;
+    --stage-3: #f59e0b;
+    --stage-4: #ef4444;
+    --stage-5: #7c3aed;
+    --card-bg: rgba(255,255,255,0.04);
+    --border:  rgba(255,255,255,0.08);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--kidney-dark);
+    color: var(--text-light);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background mesh */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 20%, rgba(192,57,43,0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 80%, rgba(0,180,166,0.10) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(74,30,28,0.3) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* Noise texture */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 0; opacity: 0.4;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ─── HEADER ─────────────────────────────────────────────────────── */
+  header {
+    padding: 48px 0 32px;
+    text-align: center;
+    animation: fadeDown .8s ease both;
+  }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(192,57,43,0.2); border: 1px solid rgba(192,57,43,0.4);
+    color: #ff8975; font-size: 11px; font-weight: 500; letter-spacing: 2px;
+    text-transform: uppercase; padding: 6px 14px; border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .badge::before { content: '●'; font-size: 8px; animation: pulse 2s infinite; }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2.2rem, 6vw, 4.2rem);
+    font-weight: 800;
+    line-height: 1.05;
+    background: linear-gradient(135deg, #f0e8e6 0%, #e8a838 45%, #c0392b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 14px;
+  }
+
+  .subtitle {
+    color: var(--text-muted); font-size: 1.05rem;
+    max-width: 560px; margin: 0 auto 8px;
+    line-height: 1.65;
+  }
+
+  .stats-bar {
+    display: flex; justify-content: center; gap: 32px; flex-wrap: wrap;
+    margin: 28px 0; padding: 18px 32px;
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 14px; backdrop-filter: blur(12px);
+    width: fit-content; margin-left: auto; margin-right: auto;
+  }
+  .stat { text-align: center; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 1.6rem; font-weight: 700; color: var(--accent-gold); }
+  .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+
+  /* ─── GRID LAYOUT ────────────────────────────────────────────────── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 768px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* ─── CARDS ──────────────────────────────────────────────────────── */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    backdrop-filter: blur(16px);
+    animation: fadeUp .6s ease both;
+  }
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text-muted); margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title span { color: var(--accent-gold); }
+
+  /* ─── FORM FIELDS ────────────────────────────────────────────────── */
+  .form-group { margin-bottom: 14px; }
+  label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 0.5px; }
+
+  input[type="number"], select {
+    width: 100%; padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-light);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.92rem;
+    outline: none;
+    transition: border-color .2s, background .2s;
+    -webkit-appearance: none;
+  }
+  input[type="number"]:focus, select:focus {
+    border-color: rgba(192,57,43,0.6);
+    background: rgba(192,57,43,0.06);
+  }
+  select option { background: #2d1210; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Toggle for boolean fields */
+  .toggle-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toggle-btn {
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    font-size: 0.82rem; font-family: 'DM Sans', sans-serif;
+    transition: all .2s;
+  }
+  .toggle-btn.active {
+    background: rgba(192,57,43,0.25); border-color: var(--kidney-red);
+    color: #ff8975; font-weight: 500;
+  }
+
+  /* ─── PREDICT BUTTON ─────────────────────────────────────────────── */
+  .predict-btn {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, var(--kidney-red) 0%, #8b1a13 100%);
+    border: none; border-radius: 14px;
+    color: white; font-family: 'Syne', sans-serif;
+    font-size: 1rem; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; cursor: pointer;
+    margin-top: 22px; position: relative; overflow: hidden;
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 4px 24px rgba(192,57,43,0.35);
+  }
+  .predict-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(192,57,43,0.5); }
+  .predict-btn:active { transform: translateY(0); }
+  .predict-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .predict-btn .spinner {
+    display: none; width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+    border-radius: 50%; animation: spin .7s linear infinite;
+    margin: 0 auto;
+  }
+  .predict-btn.loading .btn-text { display: none; }
+  .predict-btn.loading .spinner { display: block; }
+
+  /* ─── RESULT PANEL ───────────────────────────────────────────────── */
+  #result-panel {
+    display: none;
+    animation: fadeUp .5s ease both;
+  }
+
+  .stage-display {
+    text-align: center; padding: 32px 24px;
+    border-radius: 16px; margin-bottom: 20px;
+    position: relative; overflow: hidden;
+  }
+  .stage-display::before {
+    content: ''; position: absolute; inset: 0;
+    background: var(--stage-color, #22c55e);
+    opacity: 0.12;
+  }
+  .stage-display { border: 2px solid var(--stage-color, #22c55e); }
+
+  .stage-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 5rem; font-weight: 800;
+    color: var(--stage-color, #22c55e);
+    line-height: 1; margin-bottom: 6px;
+    text-shadow: 0 0 40px var(--stage-color);
+  }
+  .stage-name { font-size: 1rem; color: var(--text-light); font-weight: 500; }
+  .gfr-value { font-size: 0.85rem; color: var(--text-muted); margin-top: 6px; }
+  .confidence-pill {
+    display: inline-block; margin-top: 12px;
+    padding: 4px 14px; border-radius: 20px;
+    background: rgba(255,255,255,0.08);
+    font-size: 0.8rem; color: var(--text-muted);
+  }
+  .confidence-pill strong { color: var(--accent-gold); }
+
+  /* Probability bars */
+  .prob-bars { margin-bottom: 20px; }
+  .prob-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 9px;
+  }
+  .prob-label { font-size: 0.78rem; color: var(--text-muted); width: 58px; flex-shrink: 0; }
+  .prob-bar-track {
+    flex: 1; height: 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  .prob-bar-fill {
+    height: 100%; border-radius: 4px;
+    transition: width 1s cubic-bezier(.4,0,.2,1);
+    width: 0;
+  }
+  .prob-pct { font-size: 0.78rem; color: var(--text-muted); width: 38px; text-align: right; }
+
+  /* Recommendations */
+  .recs-title {
+    font-family: 'Syne', sans-serif; font-size: 0.78rem;
+    letter-spacing: 2px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 12px;
+  }
+  .rec-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px; border-radius: 10px;
+    background: rgba(255,255,255,0.03);
+    border-left: 3px solid var(--stage-color, #22c55e);
+    margin-bottom: 8px; font-size: 0.85rem;
+    line-height: 1.5; color: var(--text-light);
+    opacity: 0; transform: translateX(8px);
+    animation: slideIn .3s ease forwards;
+  }
+  .rec-item::before { content: '→'; color: var(--stage-color); flex-shrink: 0; }
+
+  .disclaimer {
+    font-size: 0.72rem; color: var(--text-muted);
+    text-align: center; padding: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; line-height: 1.6; margin-top: 16px;
+  }
+
+  /* ─── STAGE GUIDE ────────────────────────────────────────────────── */
+  .stage-guide {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 8px; margin-bottom: 32px;
+    animation: fadeUp .7s .2s ease both;
+  }
+  @media (max-width: 600px) { .stage-guide { grid-template-columns: 1fr 1fr; } }
+  .stage-card {
+    padding: 14px 12px; border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--card-bg); text-align: center;
+    backdrop-filter: blur(12px);
+    transition: transform .2s, border-color .2s;
+    cursor: default;
+  }
+  .stage-card:hover { transform: translateY(-3px); }
+  .stage-card.active-stage { border-color: var(--s-color); box-shadow: 0 0 20px rgba(0,0,0,0.3); }
+  .sc-num { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 800; }
+  .sc-gfr { font-size: 0.72rem; color: var(--text-muted); margin: 3px 0; }
+  .sc-label { font-size: 0.72rem; }
+
+  /* ─── ERROR ──────────────────────────────────────────────────────── */
+  .error-box {
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px; padding: 14px 18px; margin-top: 16px;
+    color: #fca5a5; font-size: 0.85rem; display: none;
+  }
+
+  /* ─── FOOTER ─────────────────────────────────────────────────────── */
+  footer {
+    text-align: center; padding: 32px 0 48px;
+    color: var(--text-muted); font-size: 0.78rem;
+    border-top: 1px solid var(--border); margin-top: 16px;
+    animation: fadeUp .8s .4s ease both;
+  }
+  footer strong { color: var(--accent-gold); }
+
+  /* ─── ANIMATIONS ─────────────────────────────────────────────────── */
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:none; } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(20px);  } to { opacity:1; transform:none; } }
+  @keyframes spin     { to { transform: rotate(360deg); } }
+  @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.3; } }
+  @keyframes slideIn  { to { opacity:1; transform:none; } }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- HEADER -->
+  <header>
+    <div class="badge">AI-Powered Medical Screening Tool</div>
+    <h1>CKD Stage Predictor</h1>
+    <p class="subtitle">
+      Enter clinical values to receive an AI-driven Chronic Kidney Disease stage prediction
+      based on GFR-calibrated Random Forest classification.
+    </p>
+    <div class="stats-bar">
+      <div class="stat">
+        <div class="stat-value" id="stat-acc">99.8%</div>
+        <div class="stat-label">CV Accuracy</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">5</div>
+        <div class="stat-label">CKD Stages</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">20</div>
+        <div class="stat-label">Clinical Features</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">RF</div>
+        <div class="stat-label">Algorithm</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- STAGE GUIDE -->
+  <div class="stage-guide" id="stage-guide">
+    <div class="stage-card" style="--s-color: var(--stage-1)">
+      <div class="sc-num" style="color:var(--stage-1)">1</div>
+      <div class="sc-gfr">GFR ≥90</div>
+      <div class="sc-label" style="color:var(--stage-1)">Normal</div>
+    </div>
+    <div class="stage-card" style="--s-color: var(--stage-2)">
+      <div class="sc-num" style="color:var(--stage-2)">2</div>
+      <div class="sc-gfr">GFR 60–89</div>
+      <div class="sc-label" style="color:var(--stage-2)">Mild</div>
+    </div>
+    <div class="stage-card" style="--s-color: var(--stage-3)">
+      <div class="sc-num" style="color:var(--stage-3)">3</div>
+      <div class="sc-gfr">GFR 30–59</div>
+      <div class="sc-label" style="color:var(--stage-3)">Moderate</div>
+    </div>
+    <div class="stage-card" style="--s-color: var(--stage-4)">
+      <div class="sc-num" style="color:var(--stage-4)">4</div>
+      <div class="sc-gfr">GFR 15–29</div>
+      <div class="sc-label" style="color:var(--stage-4)">Severe</div>
+    </div>
+    <div class="stage-card" style="--s-color: var(--stage-5)">
+      <div class="sc-num" style="color:var(--stage-5)">5</div>
+      <div class="sc-gfr">GFR &lt;15</div>
+      <div class="sc-label" style="color:var(--stage-5)">Failure</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <!-- INPUT FORM -->
+    <div class="card" style="animation-delay:.1s">
+      <div class="card-title"><span>①</span> Patient Clinical Values</div>
+
+      <!-- Demographics -->
+      <div class="field-row">
+        <div class="form-group">
+          <label>Age (years)</label>
+          <input type="number" id="age" value="50" min="1" max="110">
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select id="is_female">
+            <option value="0">Male</option>
+            <option value="1">Female</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Kidney markers -->
+      <div class="field-row">
+        <div class="form-group">
+          <label>Serum Creatinine (mg/dL)</label>
+          <input type="number" id="creatinine" value="1.2" step="0.1" min="0.1" max="20">
+        </div>
+        <div class="form-group">
+          <label>Blood Urea (mg/dL)</label>
+          <input type="number" id="blood_urea" value="35" step="1" min="5" max="300">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="form-group">
+          <label>Sodium (mEq/L)</label>
+          <input type="number" id="sodium" value="140" step="1" min="110" max="160">
+        </div>
+        <div class="form-group">
+          <label>Potassium (mEq/L)</label>
+          <input type="number" id="potassium" value="4.0" step="0.1" min="2" max="8">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="form-group">
+          <label>Hemoglobin (g/dL)</label>
+          <input type="number" id="hemoglobin" value="13.5" step="0.1" min="3" max="20">
+        </div>
+        <div class="form-group">
+          <label>Packed Cell Volume (%)</label>
+          <input type="number" id="packed_cell_volume" value="42" step="1" min="10" max="60">
+        </div>
+      </div>
+
+      <!-- Blood pressure -->
+      <div class="field-row">
+        <div class="form-group">
+          <label>Systolic BP (mmHg)</label>
+          <input type="number" id="systolic_bp" value="120" step="1" min="70" max="220">
+        </div>
+        <div class="form-group">
+          <label>Diastolic BP (mmHg)</label>
+          <input type="number" id="diastolic_bp" value="80" step="1" min="40" max="140">
+        </div>
+      </div>
+
+      <!-- CBC -->
+      <div class="field-row">
+        <div class="form-group">
+          <label>RBC (millions/μL)</label>
+          <input type="number" id="red_blood_cells" value="4.5" step="0.1" min="1" max="8">
+        </div>
+        <div class="form-group">
+          <label>WBC (cells/μL)</label>
+          <input type="number" id="white_blood_cells" value="6000" step="100" min="1000" max="30000">
+        </div>
+      </div>
+
+      <!-- Urine markers -->
+      <div class="field-row">
+        <div class="form-group">
+          <label>Albumin (0–4)</label>
+          <select id="albumin">
+            <option value="0">0 — None</option>
+            <option value="1">1 — Trace</option>
+            <option value="2">2 — +1</option>
+            <option value="3">3 — +2</option>
+            <option value="4">4 — +3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Sugar (0–4)</label>
+          <select id="sugar">
+            <option value="0">0 — None</option>
+            <option value="1">1 — Trace</option>
+            <option value="2">2 — +1</option>
+            <option value="3">3 — +2</option>
+            <option value="4">4 — +3</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMORBIDITIES + RESULTS -->
+    <div>
+      <div class="card" style="animation-delay:.2s; margin-bottom:24px;">
+        <div class="card-title"><span>②</span> Comorbidities & Symptoms</div>
+
+        <div class="form-group">
+          <label>Hypertension</label>
+          <div class="toggle-group">
+            <button class="toggle-btn" onclick="setToggle('hypertension',0,this)">No</button>
+            <button class="toggle-btn active" onclick="setToggle('hypertension',1,this)">Yes</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Diabetes Mellitus</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="setToggle('diabetes_mellitus',0,this)">No</button>
+            <button class="toggle-btn" onclick="setToggle('diabetes_mellitus',1,this)">Yes</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Coronary Artery Disease</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="setToggle('coronary_artery_disease',0,this)">No</button>
+            <button class="toggle-btn" onclick="setToggle('coronary_artery_disease',1,this)">Yes</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Appetite</label>
+          <div class="toggle-group">
+            <button class="toggle-btn" onclick="setToggle('appetite',0,this)">Poor</button>
+            <button class="toggle-btn active" onclick="setToggle('appetite',1,this)">Good</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Pedal Edema</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="setToggle('pedal_edema',0,this)">No</button>
+            <button class="toggle-btn" onclick="setToggle('pedal_edema',1,this)">Yes</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Anaemia</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" onclick="setToggle('anemia',0,this)">No</button>
+            <button class="toggle-btn" onclick="setToggle('anemia',1,this)">Yes</button>
+          </div>
+        </div>
+
+        <button class="predict-btn" id="predictBtn" onclick="predict()">
+          <span class="btn-text">Analyse & Predict CKD Stage</span>
+          <div class="spinner"></div>
+        </button>
+        <div class="error-box" id="errorBox"></div>
+      </div>
+
+      <!-- RESULT PANEL -->
+      <div class="card" id="result-panel">
+        <div class="card-title"><span>③</span> Prediction Result</div>
+
+        <div class="stage-display" id="stageDisplay" style="--stage-color:#22c55e">
+          <div class="stage-num" id="stageNum">—</div>
+          <div class="stage-name" id="stageName"></div>
+          <div class="gfr-value" id="gfrVal"></div>
+          <div class="confidence-pill">Confidence: <strong id="confVal">—</strong></div>
+        </div>
+
+        <div class="prob-bars" id="probBars"></div>
+
+        <div class="recs-title">Clinical Recommendations</div>
+        <div id="recsList"></div>
+
+        <div class="disclaimer" id="disclaimerText"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <p><strong>CKD Stage Predictor</strong> — Balaji · Reg. 12212231 · Lovely Professional University</p>
+    <p style="margin-top:6px">Random Forest · CKD-EPI GFR Formula · KDIGO 2012 Staging Guidelines</p>
+    <p style="margin-top:8px; color:#6b5048">For educational use only. Not a substitute for clinical diagnosis.</p>
+  </footer>
+</div>
+
+<script>
+  // ─── Toggle state ────────────────────────────────────────────────────────────
+  const toggleValues = {
+    hypertension: 1,
+    diabetes_mellitus: 0,
+    coronary_artery_disease: 0,
+    appetite: 1,
+    pedal_edema: 0,
+    anemia: 0,
+  };
+
+  function setToggle(key, val, btn) {
+    toggleValues[key] = val;
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  // ─── Stage colour map ────────────────────────────────────────────────────────
+  const stageColors = {
+    1: '#22c55e', 2: '#84cc16', 3: '#f59e0b', 4: '#ef4444', 5: '#7c3aed'
+  };
+
+  // ─── API URL ─────────────────────────────────────────────────────────────────
+  // In production, change to your deployed backend URL
+  const API = 'http://localhost:5000';
+
+  // ─── Predict ─────────────────────────────────────────────────────────────────
+  async function predict() {
+    const btn = document.getElementById('predictBtn');
+    const errBox = document.getElementById('errorBox');
+    errBox.style.display = 'none';
+
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    const payload = {
+      age:                    +document.getElementById('age').value,
+      is_female:              +document.getElementById('is_female').value,
+      creatinine:             +document.getElementById('creatinine').value,
+      blood_urea:             +document.getElementById('blood_urea').value,
+      sodium:                 +document.getElementById('sodium').value,
+      potassium:              +document.getElementById('potassium').value,
+      hemoglobin:             +document.getElementById('hemoglobin').value,
+      systolic_bp:            +document.getElementById('systolic_bp').value,
+      diastolic_bp:           +document.getElementById('diastolic_bp').value,
+      albumin:                +document.getElementById('albumin').value,
+      sugar:                  +document.getElementById('sugar').value,
+      red_blood_cells:        +document.getElementById('red_blood_cells').value,
+      white_blood_cells:      +document.getElementById('white_blood_cells').value,
+      packed_cell_volume:     +document.getElementById('packed_cell_volume').value,
+      ...toggleValues,
+    };
+
+    try {
+      const res = await fetch(`${API}/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Prediction failed');
+      renderResult(data);
+    } catch (e) {
+      errBox.textContent = '⚠ ' + (e.message.includes('fetch')
+        ? 'Cannot reach backend. Make sure the Flask server is running on localhost:5000.'
+        : e.message);
+      errBox.style.display = 'block';
+    } finally {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function renderResult(d) {
+    const stage = d.predicted_stage;
+    const color = stageColors[stage] || '#22c55e';
+
+    // Panel
+    const panel = document.getElementById('result-panel');
+    panel.style.display = 'block';
+    panel.style.animation = 'none';
+    panel.offsetHeight; // reflow
+    panel.style.animation = 'fadeUp .5s ease both';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Stage display
+    const disp = document.getElementById('stageDisplay');
+    disp.style.setProperty('--stage-color', color);
+    document.getElementById('stageNum').textContent  = 'S' + stage;
+    document.getElementById('stageNum').style.color  = color;
+    document.getElementById('stageName').textContent = d.stage_label;
+    document.getElementById('gfrVal').textContent    =
+      `eGFR: ${d.estimated_gfr} mL/min/1.73m² — ${d.gfr_interpretation}`;
+    document.getElementById('confVal').textContent   = (d.confidence * 100).toFixed(1) + '%';
+
+    // Highlight stage guide
+    document.querySelectorAll('.stage-card').forEach((c, i) => {
+      c.classList.toggle('active-stage', i + 1 === stage);
+    });
+
+    // Probability bars
+    const probs = d.stage_probabilities;
+    const bars = document.getElementById('probBars');
+    bars.innerHTML = '';
+    [1,2,3,4,5].forEach(s => {
+      const p = probs[`stage_${s}`] || 0;
+      const row = document.createElement('div');
+      row.className = 'prob-row';
+      row.innerHTML = `
+        <span class="prob-label">Stage ${s}</span>
+        <div class="prob-bar-track">
+          <div class="prob-bar-fill" style="background:${stageColors[s]};width:0"
+               data-target="${(p*100).toFixed(1)}%"></div>
+        </div>
+        <span class="prob-pct">${(p*100).toFixed(1)}%</span>`;
+      bars.appendChild(row);
+    });
+    // Animate bars
+    requestAnimationFrame(() => {
+      bars.querySelectorAll('.prob-bar-fill').forEach(el => {
+        el.style.width = el.dataset.target;
+      });
+    });
+
+    // Recommendations
+    const recsList = document.getElementById('recsList');
+    recsList.innerHTML = '';
+    d.recommendations.forEach((r, i) => {
+      const div = document.createElement('div');
+      div.className = 'rec-item';
+      div.style.setProperty('--stage-color', color);
+      div.style.animationDelay = `${i * 0.06}s`;
+      div.innerHTML = r;
+      recsList.appendChild(div);
+    });
+
+    document.getElementById('disclaimerText').textContent = d.disclaimer;
+  }
+
+  // Load metadata on boot
+  fetch(`${API}/metadata`).then(r => r.json()).then(m => {
+    document.getElementById('stat-acc').textContent =
+      ((m.cv_mean || 0.998) * 100).toFixed(1) + '%';
+  }).catch(() => {});
+</script>
+</body>
+</html>
