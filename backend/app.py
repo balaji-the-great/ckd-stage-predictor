@@ -16,7 +16,7 @@ CORS(app)
 
 # ─── Load artefacts ────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ART_DIR  = os.path.join(BASE_DIR, "..", "model", "artefacts")
+ART_DIR = os.path.join(BASE_DIR, "..", "artefacts")
 
 model    = joblib.load(os.path.join(ART_DIR, "model.pkl"))
 scaler   = joblib.load(os.path.join(ART_DIR, "scaler.pkl"))
